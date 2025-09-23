@@ -72,7 +72,7 @@ git clone https://github.com/NAMA_ANDA/mentora-backend.git
 cd mentora-backend
 ```
 
-####2. Konfigurasi Environment Docker
+#### 2. Konfigurasi Environment Docker
 
 Buat file baru bernama .env.docker, lalu salin isi dari .env.example.
 Isi nilai berikut:
@@ -81,19 +81,19 @@ GEMINI_API_KEY=...
 GCS_BUCKET_NAME=...
 SECRET_KEY=...   # string acak, panjang & aman
 ```
-####3. Tambahkan Kredensial Google Cloud 🔑
+#### 3. Tambahkan Kredensial Google Cloud 🔑
 
 •Buat folder credentials/
 •Masukkan file kredensial JSON Google Cloud ke folder tersebut
 •Pastikan nama file sama dengan GOOGLE_APPLICATION_CREDENTIALS di .env.docker
 
-###4. Jalankan dengan Docker Compose 🚀
+### 4. Jalankan dengan Docker Compose 🚀
 ```bash
 docker-compose up --build
 ```
 Tunggu proses selesai → jika berhasil, Anda akan melihat log dari Uvicorn server.
 
-####5. Verifikasi
+#### 5. Verifikasi
 
 Buka browser → http://localhost:8000/docs
 Jika muncul Swagger UI, backend sudah berjalan 🎉
