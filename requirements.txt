@@ -1,0 +1,20 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic[email]
+python-dotenv
+PyMuPDF
+redis
+pydantic-settings
+google-generativeai
+fpdf2
+Pillow
+google-cloud-texttospeech
+soundfile
+numpy
+google-cloud-storage
+sqlalchemy
+psycopg2-binary  # Untuk PostgreSQL
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart # Untuk form login

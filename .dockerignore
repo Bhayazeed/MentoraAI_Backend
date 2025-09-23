@@ -1,0 +1,19 @@
+# Abaikan virtual environment Python
+venv/
+.venv/
+
+# Abaikan cache Python
+__pycache__/
+*.pyc
+
+# JANGAN masukkan file rahasia .env ke dalam image
+.env
+
+# Kita tidak butuh database SQLite lama
+mentora.db
+
+# Abaikan file Git dan spesifik OS
+.git
+.gitignore
+.DS_Store
+

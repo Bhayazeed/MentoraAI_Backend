@@ -1,0 +1,25 @@
+# Environments
+# Abaikan virtual environment Python dan semua file environment rahasia
+venv/
+.venv/
+.env
+.env.docker
+
+# Dependencies & Caches
+# Abaikan folder instalasi dependensi dan cache sistem operasi/editor
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
+
+# Databases
+# Abaikan file database lokal
+mentora.db
+
+# Credentials
+# JANGAN PERNAH MENGIRIM FOLDER KREDENSIAL KE GIT
+credentials/
+
+# Docker
+# Abaikan cache atau file yang dihasilkan oleh Docker
+.docker/
