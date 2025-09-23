@@ -87,7 +87,7 @@ SECRET_KEY=...   # string acak, panjang & aman
 •Masukkan file kredensial JSON Google Cloud ke folder tersebut
 •Pastikan nama file sama dengan GOOGLE_APPLICATION_CREDENTIALS di .env.docker
 
-### 4. Jalankan dengan Docker Compose 🚀
+#### 4. Jalankan dengan Docker Compose 🚀
 ```bash
 docker-compose up --build
 ```
