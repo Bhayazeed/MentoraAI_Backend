@@ -3,10 +3,9 @@
 </p>
 
 # MentoraAI - Simulasi Seminar Proposal dengan AI 🧠✨
-
-Selamat datang di **repositori backend untuk MentoraAI**!  
-Proyek ini adalah aplikasi web canggih yang dirancang untuk membantu mahasiswa mempersiapkan diri menghadapi **seminar proposal (sempro)** atau **sidang skripsi** melalui simulasi interaktif bersama **Dosen Penguji berbasis AI**.
 ---
+Selamat datang di **repositori backend untuk MentoraAI!  
+Proyek ini adalah aplikasi web canggih yang dirancang untuk membantu mahasiswa mempersiapkan diri menghadapi **seminar proposal (sempro)** atau **sidang skripsi** melalui simulasi interaktif bersama **Dosen Penguji berbasis AI.
 
 ## 📝 Deskripsi Proyek
 MentoraAI memberikan pengalaman simulasi **sempro yang realistis**.  
