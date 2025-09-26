@@ -16,6 +16,6 @@ google-cloud-storage
 sqlalchemy
 psycopg2-binary  # Untuk PostgreSQL
 python-jose[cryptography]
-passlib[bcrypt]
-bcrypt
+passlib==1.7.4
+bcrypt==3.2.2
 python-multipart # Untuk form login
