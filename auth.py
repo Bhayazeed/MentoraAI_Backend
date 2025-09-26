@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Any
 
 from fastapi import Depends, HTTPException, status, APIRouter
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -30,11 +30,25 @@ def get_db():
     finally:
         db.close()
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+# --- FIX: Tambahkan penanganan batas 72-byte bcrypt ---
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    Verifikasi password dengan menangani batas 72 byte dari bcrypt.
+    """
+    password_bytes = plain_password.encode('utf-8')
+    if len(password_bytes) > 72:
+        password_bytes = password_bytes[:72]
+    return pwd_context.verify(password_bytes, hashed_password)
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+# --- FIX: Tambahkan penanganan batas 72-byte bcrypt ---
+def get_password_hash(password: str) -> str:
+    """
+    Hash password dengan menangani batas 72 byte dari bcrypt.
+    """
+    password_bytes = password.encode('utf-8')
+    if len(password_bytes) > 72:
+        password_bytes = password_bytes[:72]
+    return pwd_context.hash(password_bytes)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -46,18 +60,18 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def get_user(db: Session, email: str):
+def get_user(db: Session, email: str) -> Optional[models.User]:
     return db.query(models.User).filter(models.User.email == email).first()
 
-def authenticate_user(db: Session, email: str, password: str):
+def authenticate_user(db: Session, email: str, password: str) -> Optional[models.User]:
     user = get_user(db, email)
     if not user:
-        return False
+        return None
     if not verify_password(password, user.hashed_password):
-        return False
+        return None
     return user
 
-def get_current_user_from_token(db: Session, token: str):
+def get_current_user_from_token(db: Session, token: str) -> models.User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -65,11 +79,12 @@ def get_current_user_from_token(db: Session, token: str):
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
+        email: Optional[str] = payload.get("sub")
         if email is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
+    
     user = get_user(db, email=email)
     if user is None:
         raise credentials_exception
@@ -84,7 +99,10 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email sudah terdaftar")
+    
+    # Fungsi ini sekarang sudah aman karena menggunakan get_password_hash yang baru
     hashed_password = get_password_hash(user.password)
+    
     new_user = models.User(email=user.email, hashed_password=hashed_password)
     db.add(new_user)
     db.commit()
@@ -93,6 +111,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/token", response_model=schemas.Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    # Fungsi ini sudah aman karena authenticate_user memanggil verify_password yang baru
     user = authenticate_user(db, email=form_data.username, password=form_data.password)
     if not user:
         raise HTTPException(
