@@ -530,12 +530,17 @@ async def websocket_session_handler(
 ):
     await websocket.accept()
     db: Session = SessionLocal()
+
+    print(f"--- [DEBUG] WebSocket handler dimulai untuk sesi: {session_id} ---")
     
     try:
         user = auth.get_current_user_from_token(db, token)
         if not user:
+            print("[DEBUG] GAGAL: Token tidak valid atau user tidak ditemukan.")
             await websocket.close(code=4001, reason="Token tidak valid atau kedaluwarsa")
             return
+
+        print(f"[DEBUG] BERHASIL: User ditemukan -> {user.email}")
 
         db_session = db.query(models.SimulationSession).filter(
             models.SimulationSession.id == session_id,
@@ -543,8 +548,11 @@ async def websocket_session_handler(
         ).first()
 
         if not db_session:
+            print(f"[DEBUG] GAGAL: Sesi ID '{session_id}' tidak ditemukan untuk user '{user.email}'.")
             await websocket.close(code=1008, reason="Sesi tidak valid atau bukan milik Anda.")
             return
+        
+        print(f"[DEBUG] BERHASIL: Sesi DB ditemukan -> {db_session.id}")
 
         context = json.loads(db_session.context_data)
         
@@ -558,6 +566,8 @@ async def websocket_session_handler(
         greeting_audio = await synthesize_audio(greeting, speaker_id=voice_name)
         if greeting_audio: await websocket.send_bytes(greeting_audio)
         
+        print("[DEBUG] Memasuki loop utama (while True). Koneksi seharusnya stabil sekarang.")
+
         while True:
             raw = await websocket.receive_text()
             data = json.loads(raw)

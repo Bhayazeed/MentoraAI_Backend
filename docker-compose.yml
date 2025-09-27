@@ -8,13 +8,19 @@ services:
     env_file:
       - .env.docker
     volumes:
+      # BARIS LAMA (tetap dipertahankan):
       - ./credentials:/app/credentials
-    # --- MODIFIKASI KUNCI ---
-    # Sekarang, backend akan menunggu sampai healthcheck db 'sehat'
+      # --- BARIS BARU 1: Sinkronkan semua kode Anda ---
+      # Ini akan memetakan folder proyek Anda (.) ke folder /app di dalam container.
+      - .:/app
+    
+    # --- BARIS BARU 2: Perintah untuk auto-reload ---
+    # Menjalankan server dengan flag --reload agar otomatis restart saat kode berubah.
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    
     depends_on:
       db:
         condition: service_healthy
-    # -----------------------
 
   db:
     image: postgres:15
@@ -22,14 +28,11 @@ services:
       - postgres_data:/var/lib/postgresql/data/
     env_file:
       - .env.docker
-    # --- TAMBAHAN BARU ---
-    # Memberitahu Docker cara memeriksa apakah database sudah siap
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d mentoradb"]
       interval: 5s
       timeout: 5s
       retries: 5
-    # --------------------
 
 volumes:
   postgres_data:
