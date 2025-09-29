@@ -24,6 +24,7 @@ class SimulationSession(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     
     title = Column(String, nullable=True)
+    filename = Column(String, nullable=True) # FIX: Menambahkan kolom filename
     context_data = Column(Text, nullable=False) # Menyimpan JSON dari context_blocks
     final_score = Column(Float, nullable=True) # Diubah ke Float agar konsisten dengan schema
     feedback = Column(Text, nullable=True)
@@ -34,4 +35,3 @@ class SimulationSession(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     owner = relationship("User", back_populates="sessions")
-

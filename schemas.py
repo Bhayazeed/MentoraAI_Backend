@@ -64,10 +64,10 @@ class UploadResponse(BaseModel):
 class SessionHistoryItem(BaseModel):
     session_id: str
     title: str
+    filename: str # Pastikan field ini ada
     created_at: datetime
     final_score: Optional[float] = None
     download_url: Optional[str] = None
     
     class Config:
         from_attributes = True # DIGANTI dari orm_mode
-

@@ -5,7 +5,7 @@ import json
 import base64
 import traceback
 import io
-from datetime import datetime, timedelta, timezone # FIX: Impor timezone
+from datetime import datetime, timedelta, timezone
 
 # --- BARU: Impor dan panggil load_dotenv ---
 from dotenv import load_dotenv
@@ -42,7 +42,7 @@ app = FastAPI(
     description="Backend simulasi sempro dengan otentikasi, database, dan GCS.",
 )
 
-# --- MODIFIKASI: Menambahkan CORS Middleware untuk frontend ---
+# --- MODIFIKasi: Menambahkan CORS Middleware untuk frontend ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Ganti dengan domain frontend Anda di produksi
@@ -65,12 +65,13 @@ GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
 if not GCS_BUCKET_NAME:
     print("PERINGATAN: 'GCS_BUCKET_NAME' tidak ditemukan. Upload laporan akan gagal.")
 
-# --- Daftar Suara Google TTS (tetap sama) ---
+# --- PERBAIKAN FINAL: Menggunakan nama model suara Chirp HD yang benar ---
+# Format yang benar adalah 'id-ID-Chirp3-HD-<NamaPersona>'
 GOOGLE_TTS_VOICES = {
-    "Pria - A (Standar)": "id-ID-Standard-A",
-    "Pria - B (Standar)": "id-ID-Standard-B",
-    "Pria - C (Standar)": "id-ID-Standard-C",
-    "Wanita - D (Standar)": "id-ID-Standard-D",
+    "Pria - Algenib (Chirp HD)": "id-ID-Chirp3-HD-Algenib",
+    "Pria - Achird (Chirp HD)": "id-ID-Chirp3-HD-Achird",
+    "Wanita - Achernar (Chirp HD)": "id-ID-Chirp3-HD-Achernar",
+    "Wanita - Aoede (Chirp HD)": "id-ID-Chirp3-HD-Aoede",
 }
 
 # --- MODIFIKASI: Dependensi untuk mendapatkan sesi database ---
@@ -81,8 +82,8 @@ def get_db():
     finally:
         db.close()
 
-DEMO_RESPONSES = { "latar belakang": "Mode Demo: Tentu, bisa Anda jelaskan lebih detail mengenai latar belakang masalah yang Anda angkat?", "metode": "Mode Demo: Menarik. Coba uraikan metodologi penelitian yang akan Anda gunakan.", "kebaruan": "Mode Demo: Apa aspek kebaruan atau orisinalitas utama dari penelitian yang Anda usulkan ini?"}
-DEFAULT_DEMO_RESPONSE = "Mode Demo: Itu poin yang menarik. Bisa tolong dielaborasi lebih lanjut?"
+DEMO_RESPONSES = { "latar belakang": "Tentu, bisa Anda jelaskan lebih detail mengenai latar belakang masalah yang Anda angkat?", "metode": "Menarik. Coba uraikan metodologi penelitian yang akan Anda gunakan.", "kebaruan": "Apa aspek kebaruan atau orisinalitas utama dari penelitian yang Anda usulkan ini?"}
+DEFAULT_DEMO_RESPONSE = "Itu poin yang menarik. Bisa tolong dielaborasi lebih lanjut?"
 
 def get_demo_reply(transcript: str) -> str:
     """Memberikan jawaban berbasis skrip untuk Mode Demo."""
@@ -91,89 +92,86 @@ def get_demo_reply(transcript: str) -> str:
         if keyword in lower_transcript: return response
     return DEFAULT_DEMO_RESPONSE
 
-async def get_llm_reply(context_blocks: list, transcript: str) -> str:
-    # Fungsi ini tidak perlu diubah secara signifikan
+# --- PERBAIKAN KUNCI #2: Fungsi LLM Diperbarui ---
+# Fungsi ini sekarang menerima 'chat_history' untuk memberikan konteks percakapan.
+async def get_llm_reply(context_blocks: list, chat_history: list) -> str:
     if not GEMINI_API_KEY: return "Kunci API Gemini belum dikonfigurasi."
+
+    # --- PERBAIKAN KUNCI #1: System Prompt yang Lebih Cerdas & Kontekstual ---
+    # Prompt ini diubah untuk mendorong dialog, bukan interogasi.
     system_prompt = """
-    Anda adalah AI Dosen Penguji bernama 'Mentora'. Peran Anda adalah menjadi penguji yang kritis, adil, namun juga komunikatif dan mendukung. Tujuan utama Anda adalah menguji pemahaman dan alur berpikir mahasiswa secara mendalam, bukan hanya pengetahuan teknis. Anggap diri Anda sebagai mitra diskusi yang mendorong mahasiswa untuk merefleksikan pilihan-pilihan dalam penelitiannya.
+    Anda adalah AI Dosen Penguji bernama 'Mentora'. Peran Anda adalah sebagai mitra diskusi yang kritis namun suportif. Tujuan Anda bukan hanya menguji, tetapi membantu mahasiswa mengeksplorasi dan memperkuat argumen penelitiannya. Ciptakan alur diskusi yang alami dan dua arah.
 
-Prinsip Utama: Menggali Pemahaman, Bukan Hanya Menguji (Fokus 5W1H)
-Gunakan kerangka 5W1H untuk menyusun pertanyaan yang menggali pemikiran di balik penelitian. Prioritaskan pertanyaan "Mengapa" dan "Bagaimana".
+    **Prinsip Utama: Pola "Dengar, Akui, Tanya"**
+    Ini adalah kunci untuk membuat percakapan terasa alami.
+    1.  **Dengar:** Pahami poin utama dari jawaban mahasiswa.
+    2.  **Akui (Acknowledge):** Awali respons Anda dengan pengakuan singkat terhadap jawaban mereka. Ini menunjukkan Anda mendengarkan. Gunakan frasa seperti "Baik, saya paham poin Anda tentang...", "Menarik sekali penjelasan Anda mengenai...", atau "Oke, jadi Anda berpendapat bahwa...".
+    3.  **Tanya (Inquire):** Ajukan pertanyaan lanjutan yang MENGALIR dari jawaban sebelumnya. Jangan melompat ke topik baru kecuali mahasiswa sudah tuntas menjawab.
 
-MENGAPA (Untuk Menguji Justifikasi & Rationale):
-Ini adalah jenis pertanyaan yang paling penting. Tanyakan alasan di balik setiap keputusan penting.
-Contoh: "Mengapa Anda memilih menggunakan variabel X untuk penelitian ini, dan bukan variabel Y yang juga sering dibahas?"
-Contoh: "Apa justifikasi utama di balik pemilihan metode Analisis Sentimen? Mengapa metode ini Anda anggap lebih signifikan untuk menangani set data Anda dibandingkan metode lain?"
-Contoh: "Mengapa rumusan masalah ini yang Anda angkat? Apa yang membuatnya relevan untuk diteliti saat ini?"
+    **Contoh Alur Percakapan yang Baik:**
+    -   *Mahasiswa:* "...jadi saya menggunakan metode ABC karena lebih cepat dalam pemrosesan data."
+    -   *Anda (Respons Buruk/Kaku):* "Apa kelemahan metode ABC?"
+    -   *Anda (Respons BAIK/Alami):* "Poin yang bagus mengenai kecepatan proses. Namun, bagaimana Anda mengantisipasi masalah akurasi yang seringkali menjadi trade-off pada metode ABC?"
 
-BAGAIMANA (Untuk Menguji Proses & Penerapan):
-Tanyakan tentang langkah-langkah konkret dan cara mengatasi tantangan.
-Contoh: "Bagaimana Anda berencana untuk mengukur validitas dari data yang Anda kumpulkan?"
-Contoh: "Jika Anda menemukan hasil yang tidak sesuai dengan hipotesis awal, bagaimana langkah Anda selanjutnya?"
-Contoh: "Bagaimana Anda akan memastikan metode yang Anda usulkan dapat diterapkan pada skala yang lebih besar?"
-
-APA (Untuk Menguji Klarifikasi & Konsep Dasar):
-Gunakan ini untuk memastikan pemahaman dasar atau untuk meminta detail lebih lanjut.
-Contoh: "Apa definisi operasional dari 'kepuasan pengguna' dalam konteks penelitian Anda?"
-Contoh: "Apa saja batasan-batasan utama dari penelitian yang Anda usulkan ini?"
-
-PERTANYAAN HIPOTETIS & PERBANDINGAN:
-Dorong mahasiswa untuk berpikir di luar proposal mereka.
-Contoh: "Apa kelemahan terbesar dari metode yang Anda pilih, dan bagaimana Anda mencoba memitigasinya?"
-Contoh: "Andai kata Anda memiliki sumber daya tak terbatas, apa satu hal yang akan Anda tambahkan pada penelitian ini untuk membuatnya lebih kuat?"
-
-Strategi Eskalasi Pertanyaan (Sangat Penting):
-Ini adalah cara Anda merespons jawaban mahasiswa untuk menciptakan alur diskusi yang dinamis.
-
-Jika jawaban mahasiswa bersifat umum atau kurang detail (contoh: "itu kurang maksimal"):
-Tindakan: Jangan ulangi pertanyaan awal. Ajukan pertanyaan pendalaman yang meminta detail spesifik.
-Contoh: "Menarik. Anda menyebutkan 'kurang maksimal', bisa tolong jelaskan dalam aspek apa saja metode Waterfall akan kurang maksimal untuk proyek spesifik Anda ini?"
-Contoh: "Apa tantangan konkret yang Anda bayangkan jika memakai Waterfall?"
-
-Jika mahasiswa sudah memberikan jawaban yang baik pada satu topik:
-Tindakan: Beralihlah ke aspek lain dari presentasi untuk memperluas cakupan ujian. Gunakan frasa penghubung.
-Contoh: "Baik, penjelasan Anda mengenai metodologi sudah cukup jelas. Sekarang, mari kita beralih ke bagian rumusan masalah..."
-
-Aturan Teknis & Gaya Bahasa:
-Tugas utama: Selalu ajukan pertanyaan. Jangan memberikan jawaban, kesimpulan, atau petunjuk.
-Gaya bahasa: Gunakan bahasa yang lugas, komunikatif, dan mudah dipahami. Hindari jargon yang tidak perlu.
-Singkat & fokus: Jaga setiap pertanyaan tetap singkat (1-2 kalimat).
-Format output: Hasilkan hanya teks murni (plain text). Jangan pernah menggunakan markdown, asterisks, atau format khusus lainnya agar kompatibel dengan Text-to-Speech (TTS).
-Tanda baca: Gunakan tanda baca Bahasa Indonesia yang standar untuk intonasi yang benar.
+    **Aturan Gaya & Teknis:**
+    -   **Jadilah Mitra Diskusi:** Jangan hanya bertanya. Anda boleh memberikan afirmasi singkat ("Itu penjelasan yang jernih.") sebelum bertanya.
+    -   **Variasi Pertanyaan:** Gunakan berbagai jenis pertanyaan (klarifikasi, perbandingan, hipotetis) untuk menjaga dinamika. Hindari rentetan pertanyaan "Mengapa?" yang monoton.
+    -   **Fokus pada Alur:** Usahakan pertanyaan baru selalu terkait dengan jawaban terakhir mahasiswa.
+    -   **Jaga Tetap Singkat:** Respons Anda (pengakuan + pertanyaan) sebaiknya tetap dalam 1-3 kalimat agar mudah dipahami.
+    -   **Output Wajib Teks Murni:** Jangan pernah gunakan Markdown (*, #, dll.). Ini penting untuk kompatibilitas Text-to-Speech (TTS).
     """
-    contents = ["Berikut adalah konteks dari proposal skripsi mahasiswa:"]
+
+    # --- PERBAIKAN: Memformat ulang 'contents' agar sesuai dengan struktur yang diharapkan API ---
+    # 1. Bangun daftar 'parts' (teks & gambar) dari konteks awal PDF.
+    initial_parts = ["Berikut adalah konteks dari proposal skripsi mahasiswa untuk menjadi dasar diskusi:"]
     for block in context_blocks:
         if block["type"] == "text":
-            contents.append(block["content"])
+            initial_parts.append(block["content"])
         elif block["type"] == "image":
             if block.get("caption"):
-                contents.append(f"\nBerikut adalah gambar dengan keterangan: {block['caption']}")
-            image_bytes = base64.b64decode(block["data"])
-            img = Image.open(io.BytesIO(image_bytes))
-            contents.append(img)
-    contents.append(f"\nUcapan terakhir mahasiswa: \"{transcript}\"\n\nBerdasarkan semua konteks di atas, ajukan satu pertanyaan lanjutan yang spesifik.")
+                initial_parts.append(f"\nBerikut adalah gambar dengan keterangan: {block['caption']}")
+            try:
+                image_bytes = base64.b64decode(block["data"])
+                img = Image.open(io.BytesIO(image_bytes))
+                initial_parts.append(img)
+            except Exception as e:
+                print(f"Warning: Gagal memproses gambar untuk LLM. {e}")
+
+    # 2. Buat daftar 'contents' API yang terstruktur dengan benar.
+    #    Turn pertama berisi semua konteks PDF, dianggap sebagai pesan dari 'user'.
+    api_contents = [
+        {"role": "user", "parts": initial_parts}
+    ]
+    #    Tambahkan sisa riwayat percakapan.
+    api_contents.extend(chat_history)
+
     try:
+        # Menggunakan model yang konsisten dengan kode awal Anda
         model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=system_prompt)
-        response = await model.generate_content_async(contents)
+        # Kirim 'api_contents' yang sudah terstruktur dengan benar.
+        response = await model.generate_content_async(api_contents)
         return response.text
     except Exception as e:
-        print(f"Error saat memanggil Gemini API multi-modal: {e}")
+        print(f"Error saat memanggil Gemini API: {e}")
+        traceback.print_exc()
         return "Maaf, terjadi gangguan pada sistem AI saya. Bisa tolong ulangi?"
 
 async def get_llm_score_and_feedback(full_transcript_str: str) -> dict:
-    """
-    Fungsi ini adalah "otak" dari AI Penilai. Ia meminta Gemini untuk menganalisis
-    transkrip dan mengembalikan hasilnya dalam format JSON yang ketat.
-    """
+    # Fungsi ini tidak perlu diubah secara signifikan
     if not GEMINI_API_KEY: return None
     
     system_prompt = """
-    Anda adalah Dosen Penilai AI yang objektif dan analitis. Tugas Anda adalah menganalisis transkrip jawaban mahasiswa dan memberikan penilaian kuantitatif serta kualitatif berdasarkan rubrik yang ditentukan.
+    Anda adalah Dosen Penilai AI yang sangat kritis, tegas, namun adil. Tugas Anda adalah menganalisis transkrip jawaban mahasiswa secara dingin dan objektif, tanpa ada belas kasihan. Berikan penilaian kuantitatif dan kualitatif yang mencerminkan kualitas jawaban apa adanya berdasarkan rubrik yang ketat.
 
-**Rubrik Penilaian:**
-- **relevance (Relevansi):** Skor 0 jika jawaban sama sekali tidak menjawab pertanyaan. Skor 100 jika jawaban sepenuhnya fokus pada pertanyaan yang diajukan.
-- **clarity (Kejelasan):** Skor 0 untuk jawaban yang tidak bisa dipahami. Skor 100 untuk jawaban yang terstruktur, jelas, dan menggunakan bahasa yang mudah dimengerti.
-- **mastery (Penguasaan):** Skor 0 jika tidak ada pemahaman yang ditunjukkan. Skor 100 jika mahasiswa menunjukkan pemahaman mendalam, menggunakan terminologi yang tepat, dan memberikan contoh atau justifikasi yang kuat.
+**Rubrik Penilaian (Terapkan dengan Tegas):**
+- **relevance (Relevansi):** Skor 0 jika jawaban sedikitpun melenceng. Skor 100 HANYA jika jawaban sepenuhnya fokus dan langsung menjawab inti pertanyaan.
+- **clarity (Kejelasan):** Skor 0 untuk jawaban yang berbelit-belit atau ambigu. Skor 100 HANYA untuk jawaban yang sangat terstruktur, lugas, dan menggunakan bahasa yang presisi.
+- **mastery (Penguasaan):** Skor 0 jika ada keraguan sedikitpun dalam pemahaman. Skor 100 HANYA jika mahasiswa menunjukkan penguasaan materi yang mendalam, lengkap dengan terminologi yang tepat, justifikasi yang kuat, dan contoh konkret.
+
+**Prinsip Umpan Balik (Kritis, Objektif, Membangun):**
+- **Jangan Memberi Pujian Kosong:** Hindari frasa seperti "Jawaban Anda sudah cukup baik, namun...". Langsung ke pokok permasalahan.
+- **Identifikasi Kelemahan Secara Spesifik:** Tunjukkan dengan jelas di mana letak kesalahan atau kelemahan jawaban. Contoh: "Jawaban Anda pada aspek metodologi masih terlalu umum. Anda menyebutkan akan menggunakan 'analisis data', tetapi tidak menjelaskan teknik spesifik apa (misalnya regresi, klasifikasi, atau clustering) yang relevan untuk hipotesis Anda."
+- **Berikan Solusi atau Contoh Jawaban Ideal:** Umpan balik Anda WAJIB bersifat membangun. Setelah mengkritik, berikan contoh bagaimana jawaban tersebut bisa diperbaiki. Contoh: "Jawaban yang lebih kuat akan berbunyi: 'Saya akan menggunakan metode klasifikasi Naive Bayes karena data penelitian saya bersifat kategorikal dan saya ingin memprediksi label kelas...'."
 
 **Aturan Penanganan Khusus:**
 - Jika transkrip jawaban pengguna **HANYA** berisi basa-basi (misalnya, "baik, pak", "terima kasih", "oke"), tidak mengandung informasi substantif, atau terlalu singkat untuk dinilai, **WAJIB** berikan skor 0 untuk semua kategori dan berikan feedback: "Jawaban tidak mengandung informasi yang cukup untuk dinilai."
@@ -182,16 +180,17 @@ async def get_llm_score_and_feedback(full_transcript_str: str) -> dict:
 - HANYA berikan respons dalam format JSON yang valid. Jangan tambahkan teks atau penjelasan lain di luar struktur JSON.
 - Struktur JSON WAJIB seperti ini:
 {
-  "relevance": <skor 0-100>,
-  "clarity": <skor 0-100>,
-  "mastery": <skor 0-100>,
-  "feedback": "<umpan balik yang rinci dan memberi solusi>"
+    "relevance": <skor 0-100>,
+    "clarity": <skor 0-100>,
+    "mastery": <skor 0-100>,
+    "feedback": "<umpan balik yang kritis, objektif, dan memberi solusi konkret>"
 }
 """
     user_prompt = f"Analisislah HANYA bagian dari 'user' dari transkrip ini:\n--- TRANSKRIP ---\n{full_transcript_str}\n--- AKHIR TRANSKRIP ---\n\nBerikan skor dan umpan balik dalam format JSON."
     
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=system_prompt)
+        # Menggunakan model yang konsisten dengan kode awal Anda
+        model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=system_prompt)
         config_gen = genai.types.GenerationConfig(response_mime_type="application/json")
         response = await model.generate_content_async([user_prompt], generation_config=config_gen)
         return json.loads(response.text)
@@ -199,7 +198,7 @@ async def get_llm_score_and_feedback(full_transcript_str: str) -> dict:
         print(f"Error saat memanggil Gemini API untuk penilaian: {e}")
         return None
 
-async def synthesize_audio(text: str, speaker_id: str = "id-ID-Standard-B") -> bytes:
+async def synthesize_audio(text: str, speaker_id: str = "id-ID-Chirp3-HD-Achird") -> bytes:
     """
     Mensintesis teks menjadi audio menggunakan Google Cloud Text-to-Speech API.
     Kredensial diambil secara otomatis dari environment variable GOOGLE_APPLICATION_CREDENTIALS.
@@ -246,45 +245,44 @@ def extract_section(full_text: str, start_keys: list[str], end_keys: list[str]) 
     search_offset = 0
 
     while True:
-        # Cari kemunculan kata kunci berikutnya
         potential_start_index = -1
         found_key = None
         
         for key in start_keys:
-            pos = text_upper.find(key, search_offset)
+            pos = text_upper.find(key.upper(), search_offset)
             if pos != -1 and (potential_start_index == -1 or pos < potential_start_index):
                 potential_start_index = pos
                 found_key = key
 
         if potential_start_index == -1:
-            return ""  # Tidak ada lagi kata kunci yang ditemukan
+            return "" 
 
-        # Cek apakah baris ini terlihat seperti entri Daftar Isi
         line_end_pos = text_upper.find('\n', potential_start_index)
-        if line_end_pos == -1:
-            line_end_pos = len(text_upper)
+        if line_end_pos == -1: line_end_pos = len(text_upper)
         
         line_snippet = full_text[potential_start_index:line_end_pos]
 
-        # Heuristik: Jika baris mengandung '...' atau banyak titik, anggap sebagai Daftar Isi
         if '...' in line_snippet or line_snippet.count('.') > 10:
             search_offset = line_end_pos
-            continue  # Abaikan dan cari kemunculan berikutnya
+            continue 
 
-        # Jika lolos validasi, lanjutkan dengan ekstraksi dari titik ini
         start_index = potential_start_index
         break
 
-    # Logika ekstraksi asli dari titik awal yang valid
     end_index = len(full_text)
     search_area = text_upper[start_index + len(found_key):]
     
     for end_key in end_keys:
-        pos = search_area.find(end_key)
+        pos = search_area.find(end_key.upper())
         if pos != -1:
-            end_index = start_index + len(found_key) + pos
-            break
+            line_start_pos = search_area.rfind('\n', 0, pos)
+            if line_start_pos == -1: line_start_pos = 0
             
+            line_of_end_key = search_area[line_start_pos:pos + len(end_key)]
+            if any(char.isdigit() for char in line_of_end_key) or len(line_of_end_key.split()) < 5:
+                end_index = start_index + len(found_key) + line_start_pos
+                break
+
     return full_text[start_index:end_index].strip()
 
 
@@ -293,23 +291,25 @@ def create_and_upload_report(session_id: str, user_id: int, results_data: dict) 
     pdf = FPDF()
     pdf.add_page()
     try:
-        # Menambahkan font yang mendukung Unicode (PENTING!)
-        font_path = "assets"  # Asumsi ada folder 'assets' dengan font
+        # PENTING: Pastikan folder 'assets' ada di root proyek Anda dengan font di dalamnya
+        font_path = "assets"
         pdf.add_font('DejaVu', '', os.path.join(font_path, "DejaVuSans.ttf"), uni=True)
         pdf.add_font('DejaVu', 'B', os.path.join(font_path, "DejaVuSans-Bold.ttf"), uni=True)
-        pdf.set_font('DejaVu', '', 12)
+        pdf.set_font('DejaVu', 'B', 18)
     except RuntimeError:
         print("PERINGATAN: Font DejaVu tidak ditemukan. Menggunakan Arial (mungkin ada masalah karakter).")
-        pdf.set_font('Arial', '', 12)
-   
-    pdf.set_font('DejaVu', 'B', 18); pdf.cell(0, 10, "Laporan Hasil Simulasi Seminar Proposal", ln=True, align='C')
+        pdf.set_font('Arial', 'B', 18)
+    
+    pdf.cell(0, 10, "Laporan Hasil Simulasi Seminar Proposal", ln=True, align='C')
     pdf.set_font('DejaVu', '', 10); pdf.cell(0, 8, f"ID Sesi: {session_id}", ln=True, align='C')
     pdf.cell(0, 8, f"Tanggal: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=True, align='C'); pdf.ln(10)
     pdf.set_font('DejaVu', 'B', 14); pdf.cell(0, 10, f"SKOR AKHIR: {results_data.get('final_score', 'N/A')} / 100", ln=True)
     pdf.line(pdf.get_x(), pdf.get_y(), pdf.get_x() + 190, pdf.get_y()); pdf.ln(5)
     pdf.set_font('DejaVu', 'B', 12); pdf.cell(0, 10, "Umpan Balik dari AI Penilai:", ln=True)
-    pdf.set_font('DejaVu', '', 11); pdf.multi_cell(0, 5, results_data.get('feedback', 'Tidak ada umpan balik.').encode('latin-1', 'replace').decode('latin-1'))
+    
+    pdf.set_font('DejaVu', '', 11); pdf.multi_cell(0, 5, results_data.get('feedback', 'Tidak ada umpan balik.'))
     pdf.ln(5)
+    
     pdf.set_font('DejaVu', 'B', 12); pdf.cell(0, 10, "Rincian Penilaian:", ln=True)
     pdf.set_font('DejaVu', '', 11)
     bd = results_data.get('breakdown', {})
@@ -318,17 +318,18 @@ def create_and_upload_report(session_id: str, user_id: int, results_data: dict) 
     pdf.cell(0, 6, f"- Penguasaan Materi: {bd.get('mastery', 'N/A')} / 100", ln=True); pdf.ln(10)
     pdf.set_font('DejaVu', 'B', 14); pdf.cell(0, 10, "Transkrip Lengkap", ln=True)
     pdf.line(pdf.get_x(), pdf.get_y(), pdf.get_x() + 190, pdf.get_y()); pdf.ln(5)
-    pdf.set_font('DejaVu', '', 10); pdf.multi_cell(0, 5, results_data.get('transcript', 'Transkrip tidak tersedia.').encode('latin-1', 'replace').decode('latin-1'))
+
+    pdf.set_font('DejaVu', '', 10); pdf.multi_cell(0, 5, results_data.get('transcript', 'Transkrip tidak tersedia.'))
+    
+    # --- PERBAIKAN: Konversi eksplisit dari bytearray ke bytes untuk kompatibilitas GCS ---
     pdf_bytes = bytes(pdf.output())
 
     if not GCS_BUCKET_NAME:
         raise Exception("Nama bucket GCS tidak dikonfigurasi.")
 
-    # Upload ke GCS
     try:
         storage_client = storage.Client()
         bucket = storage_client.bucket(GCS_BUCKET_NAME)
-        # Struktur path: user_<user_id>/<session_id>.pdf
         gcs_path = f"user_{user_id}/report_{session_id}.pdf"
         blob = bucket.blob(gcs_path)
         blob.upload_from_string(pdf_bytes, content_type='application/pdf')
@@ -347,7 +348,6 @@ async def handle_file_upload(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # Endpoint ini sekarang terproteksi dan memerlukan login
     if not file.filename.endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Format file tidak didukung.")
     
@@ -356,12 +356,12 @@ async def handle_file_upload(
         file_bytes = await file.read()
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         full_text = "".join(page.get_text() for page in doc)
-        # Ekstrak semua bagian yang relevan
+
         title = extract_title(full_text)
-        abstract = extract_section(full_text, ["ABSTRAK", "ABSTRACT"], ["KATA KUNCI", "PENDAHULUAN", "BAB I"])
+        abstract = extract_section(full_text, ["ABSTRAK", "ABSTRACT"], ["KATA KUNCI", "PENDAHULUAN", "BAB I", "I. PENDAHULUAN"])
         rumusan_masalah = extract_section(full_text, ["RUMUSAN MASALAH"], ["TUJUAN PENELITIAN", "BATASAN MASALAH"])
         tujuan_penelitian = extract_section(full_text, ["TUJUAN PENELITIAN"], ["MANFAAT PENELITIAN", "BATASAN MASALAH", "BAB II"])
-        metodologi_text = extract_section(full_text, ["METODOLOGI PENELITIAN","METODE PENELITIAN", "BAB III"], ["HASIL DAN PEMBAHASAN", "BAB IV"])
+        metodologi_text = extract_section(full_text, ["METODOLOGI PENELITIAN","METODE PENELITIAN", "BAB III", "III. METODE"], ["HASIL DAN PEMBAHASAN", "BAB IV"])
 
         if not abstract and not metodologi_text: raise HTTPException(status_code=422, detail="Gagal mengekstrak konten utama.")
         
@@ -388,6 +388,7 @@ async def handle_file_upload(
             user_id=current_user.id,
             context_data=json.dumps(context_blocks),
             title=title,
+            filename=file.filename,
         )
         db.add(db_session)
         db.commit()
@@ -415,7 +416,6 @@ async def handle_scoring(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # Endpoint ini juga terproteksi
     db_session = db.query(models.SimulationSession).filter(
         models.SimulationSession.id == request.session_id,
         models.SimulationSession.user_id == current_user.id
@@ -424,6 +424,7 @@ async def handle_scoring(
     if not db_session:
         raise HTTPException(status_code=404, detail="Sesi tidak ditemukan atau bukan milik Anda.")
 
+    # --- FIX: Mengakses data dari Pydantic model menggunakan dot notation (objek), bukan dict ---
     transcript_str = "\n".join([f"{entry.speaker}: {entry.text}" for entry in request.full_transcript])
     score_data = await get_llm_score_and_feedback(transcript_str)
     
@@ -438,8 +439,8 @@ async def handle_scoring(
         "transcript": transcript_str
     }
     
-    gcs_path = None # Inisialisasi gcs_path
-    download_url = None # Inisialisasi download_url
+    gcs_path = None
+    download_url = None
 
     try:
         gcs_path = create_and_upload_report(
@@ -453,17 +454,14 @@ async def handle_scoring(
         db_session.is_completed = True
         db.commit()
 
-        # --- LOGIKA BARU: BUAT SIGNED URL LANGSUNG DI SINI ---
         if gcs_path and GCS_BUCKET_NAME:
             try:
                 storage_client = storage.Client()
                 bucket = storage_client.bucket(GCS_BUCKET_NAME)
                 blob = bucket.blob(gcs_path)
-                # Buat URL yang berlaku selama 1 jam
                 download_url = blob.generate_signed_url(expiration=timedelta(hours=1))
             except Exception as e:
                 print(f"Gagal membuat signed URL setelah upload: {e}")
-                # Biarkan download_url tetap None jika gagal, agar tidak menghentikan proses
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal menyimpan laporan: {e}")
@@ -475,16 +473,14 @@ async def handle_scoring(
         final_score=final_score, 
         feedback=score_data.get('feedback', ''), 
         breakdown=breakdown_model,
-        download_url=download_url # TAMBAHKAN INI DI DALAM RESPONS
+        download_url=download_url
     )
 
 
 @app.get("/speakers")
 async def get_speakers():
-    """Endpoint untuk menyediakan daftar suara Google TTS yang tersedia ke frontend."""
     return {"speakers": list(GOOGLE_TTS_VOICES.keys())}
 
-# --- BARU: Endpoint untuk riwayat sesi ---
 @app.get("/history", response_model=list[schemas.SessionHistoryItem])
 def get_session_history(
     db: Session = Depends(get_db),
@@ -496,16 +492,25 @@ def get_session_history(
     ).order_by(models.SimulationSession.created_at.desc()).all()
     
     history_items = []
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(GCS_BUCKET_NAME)
+    
+    storage_client = None
+    bucket = None
+    if GCS_BUCKET_NAME:
+        try:
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(GCS_BUCKET_NAME)
+        except Exception as e:
+            print(f"Error initializing GCS Client: {e}")
 
     for session in sessions:
         download_url = None
-        if session.pdf_gcs_path:
+        if session.pdf_gcs_path and bucket:
             try:
                 blob = bucket.blob(session.pdf_gcs_path)
-                # Buat URL yang berlaku selama 1 jam
-                download_url = blob.generate_signed_url(expiration=timedelta(hours=1))
+                if blob.exists():
+                    download_url = blob.generate_signed_url(expiration=timedelta(hours=1))
+                else:
+                    print(f"Warning: Blob not found for path: {session.pdf_gcs_path}")
             except Exception as e:
                 print(f"Gagal membuat signed URL untuk {session.pdf_gcs_path}: {e}")
         
@@ -513,6 +518,7 @@ def get_session_history(
             schemas.SessionHistoryItem(
                 session_id=session.id,
                 title=session.title,
+                filename=session.filename,
                 created_at=session.created_at,
                 final_score=session.final_score,
                 download_url=download_url
@@ -530,17 +536,12 @@ async def websocket_session_handler(
 ):
     await websocket.accept()
     db: Session = SessionLocal()
-
-    print(f"--- [DEBUG] WebSocket handler dimulai untuk sesi: {session_id} ---")
     
     try:
         user = auth.get_current_user_from_token(db, token)
         if not user:
-            print("[DEBUG] GAGAL: Token tidak valid atau user tidak ditemukan.")
             await websocket.close(code=4001, reason="Token tidak valid atau kedaluwarsa")
             return
-
-        print(f"[DEBUG] BERHASIL: User ditemukan -> {user.email}")
 
         db_session = db.query(models.SimulationSession).filter(
             models.SimulationSession.id == session_id,
@@ -548,26 +549,23 @@ async def websocket_session_handler(
         ).first()
 
         if not db_session:
-            print(f"[DEBUG] GAGAL: Sesi ID '{session_id}' tidak ditemukan untuk user '{user.email}'.")
             await websocket.close(code=1008, reason="Sesi tidak valid atau bukan milik Anda.")
             return
         
-        print(f"[DEBUG] BERHASIL: Sesi DB ditemukan -> {db_session.id}")
-
         context = json.loads(db_session.context_data)
-        
-        # FIX 1: Membuat kedua datetime menjadi timezone-aware (UTC) untuk perbandingan
-        start_time_utc = db_session.created_at
-        
-        voice_name = GOOGLE_TTS_VOICES.get(speaker, "id-ID-Standard-B")
+        # --- PERBAIKAN FINAL: Mengubah fallback default ke suara Chirp yang valid ---
+        voice_name = GOOGLE_TTS_VOICES.get(speaker, "id-ID-Chirp3-HD-Achird")
 
-        greeting = "Selamat datang di simulasi seminar proposal. Silakan mulai presentasi Anda."
+        # --- PERUBAIKAN KUNCI #4: Inisialisasi Sejarah Percakapan ---
+        chat_history = []
+
+        greeting = "Selamat datang di simulasi seminar proposal. Silakan mulai presentasi Anda kapan pun Anda siap."
         await websocket.send_json({"type": "dosen_reply_start", "text": greeting})
         greeting_audio = await synthesize_audio(greeting, speaker_id=voice_name)
         if greeting_audio: await websocket.send_bytes(greeting_audio)
         
-        print("[DEBUG] Memasuki loop utama (while True). Koneksi seharusnya stabil sekarang.")
-
+        chat_history.append({"role": "model", "parts": [{"text": greeting}]})
+        
         while True:
             raw = await websocket.receive_text()
             data = json.loads(raw)
@@ -576,7 +574,9 @@ async def websocket_session_handler(
                 transcript = data.get("text", "").strip()
                 if not transcript: continue
                 
-                # Menggunakan start_time_utc yang sudah timezone-aware
+                chat_history.append({"role": "user", "parts": [{"text": transcript}]})
+
+                start_time_utc = db_session.created_at.replace(tzinfo=timezone.utc)
                 now_utc = datetime.now(timezone.utc)
                 remaining_seconds = (timedelta(minutes=30) - (now_utc - start_time_utc)).total_seconds()
                 is_session_ending = remaining_seconds <= 30
@@ -584,12 +584,16 @@ async def websocket_session_handler(
                 if is_session_ending:
                     reply_text = "Baik, waktu sesi Anda hampir habis. Sesi ini akan segera berakhir."
                 elif mode == "demo":
-                    # FIX 4: Memanggil fungsi get_demo_reply yang benar
                     reply_text = get_demo_reply(transcript)
                 else:
-                    reply_text = await get_llm_reply(context, transcript)
+                    reply_text = await get_llm_reply(context, chat_history)
                 
                 if reply_text:
+                    chat_history.append({"role": "model", "parts": [{"text": reply_text}]})
+                    
+                    if len(chat_history) > 20:
+                        chat_history = chat_history[-20:]
+
                     if is_session_ending:
                         await websocket.send_json({"type": "session_ending"})
                     
