@@ -190,7 +190,7 @@ async def get_llm_score_and_feedback(full_transcript_str: str) -> dict:
     
     try:
         # Menggunakan model yang konsisten dengan kode awal Anda
-        model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=system_prompt)
+        model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=system_prompt)
         config_gen = genai.types.GenerationConfig(response_mime_type="application/json")
         response = await model.generate_content_async([user_prompt], generation_config=config_gen)
         return json.loads(response.text)
