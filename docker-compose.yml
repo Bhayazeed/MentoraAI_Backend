@@ -24,6 +24,8 @@ services:
 
   db:
     image: postgres:15
+    ports: # <-- TAMBAHKAN BAGIAN INI
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     env_file:

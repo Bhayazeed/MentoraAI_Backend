@@ -153,7 +153,7 @@ Tanda baca: Gunakan tanda baca Bahasa Indonesia yang standar untuk intonasi yang
             contents.append(img)
     contents.append(f"\nUcapan terakhir mahasiswa: \"{transcript}\"\n\nBerdasarkan semua konteks di atas, ajukan satu pertanyaan lanjutan yang spesifik.")
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=system_prompt)
+        model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=system_prompt)
         response = await model.generate_content_async(contents)
         return response.text
     except Exception as e:
